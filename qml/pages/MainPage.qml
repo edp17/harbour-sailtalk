@@ -1,4 +1,5 @@
 import QtQuick 2.0
+import QtQml 2.0
 import Sailfish.Silica 1.0
 
 Page {
@@ -10,6 +11,11 @@ Page {
         onErrorOccurred: {
             console.log("SailTalk error: " + message)
         }
+    }
+
+    Component.onCompleted: {
+        if (!appEngine.connectedToSignaling)
+            appEngine.connectSignaling()
     }
 
     SilicaFlickable {
@@ -39,16 +45,14 @@ Page {
             Label {
                 width: parent.width
                 wrapMode: Text.Wrap
-                text: qsTr("Enter the same signaling server on both devices. Then copy the other device's ID into the field below to place a call. ws://192.168.1.85:8080")
+                text: qsTr("Enter the same signaling server on both devices. Then copy the other device's ID into the field below to place a call.")
             }
 
-            TextField {
-                id: signalingField
+            TextArea {
                 width: parent.width
+                readOnly: true
                 label: qsTr("Signaling server")
-                placeholderText: qsTr("wss://your-server.example/ws")
                 text: appEngine.signalingUrl
-                onTextChanged: appEngine.signalingUrl = text
             }
 
             SectionHeader {
@@ -65,10 +69,6 @@ Page {
             SectionHeader {
                 text: qsTr("Outgoing call")
             }
-
-Label {
-text: qsTr("For X10: b7399551-4238-4ac1-a522-1fb73e253a58 \ln for MotoG7: c496c7c9-703a-4c0c-8b6b-15d212d5513a")
-}
 
             TextField {
                 id: peerField

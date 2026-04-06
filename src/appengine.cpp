@@ -12,12 +12,19 @@ AppEngine::AppEngine(QObject *parent)
       m_signaling(new SignalingClient(this))
 {
     QSettings settings;
-    m_ownId = settings.value("identity/ownId").toString();
 
+    // Persistent own device ID
+    m_ownId = settings.value("identity/ownId").toString();
     if (m_ownId.isEmpty()) {
         m_ownId = QUuid::createUuid().toString().remove("{").remove("}");
         settings.setValue("identity/ownId", m_ownId);
     }
+
+    // Persistent last-used peer ID
+    m_peerId = settings.value("identity/peerId").toString();
+
+    // Hardcoded signaling server
+    m_signalingUrl = QStringLiteral("ws://192.168.1.90:8585");
 
     connect(m_signaling, &SignalingClient::connectedChanged,
             this, &AppEngine::connectedToSignalingChanged);
@@ -65,7 +72,12 @@ void AppEngine::setPeerId(const QString &value)
 {
     if (m_peerId == value)
         return;
+
     m_peerId = value;
+
+    QSettings settings;
+    settings.setValue("identity/peerId", m_peerId);
+
     emit peerIdChanged();
 }
 
