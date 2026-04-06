@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+X-Sailfish-ApplicationType=Silica
+Icon=harbour-sailtalk
+Exec=harbour-sailtalk
+Name=SailTalk
+Comment=Sailfish Os Audio calls
+
+[X-Sailjail]
+Sandboxing=Disabled
