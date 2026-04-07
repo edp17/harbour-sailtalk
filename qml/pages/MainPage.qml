@@ -81,8 +81,25 @@ Page {
 
             Label {
                 width: parent.width
+                color: appEngine.onlinePeers.indexOf(peerField.text) >= 0
+                       ? Theme.highlightColor
+                       : Theme.secondaryColor
+                text: appEngine.onlinePeers.indexOf(peerField.text) >= 0
+                      ? qsTr("Peer is online")
+                      : qsTr("Peer is offline")
+            }
+
+            Label {
+                width: parent.width
                 text: qsTr("Status: %1").arg(appEngine.callState)
                 color: Theme.primaryColor
+            }
+
+            Label {
+                width: parent.width
+                visible: appEngine.callState === "call-lost"
+                color: Theme.errorColor
+                text: qsTr("Call lost")
             }
 
             Button {
@@ -103,8 +120,12 @@ Page {
                 text: qsTr("Start audio call")
                 enabled: appEngine.connectedToSignaling
                          && peerField.text.length > 0
-                         && appEngine.callState === "idle"
+                         && (appEngine.callState === "idle"
+                             || appEngine.callState === "call-lost"
+                             || appEngine.callState === "rejected")
                 visible: appEngine.callState === "idle"
+                         || appEngine.callState === "call-lost"
+                         || appEngine.callState === "rejected"
                 onClicked: appEngine.startOutgoingCall()
             }
 
@@ -140,7 +161,10 @@ Page {
             Button {
                 width: parent.width
                 text: qsTr("Hang up")
-                visible: appEngine.callState !== "idle" && appEngine.callState !== "incoming"
+                visible: appEngine.callState !== "idle"
+                         && appEngine.callState !== "incoming"
+                         && appEngine.callState !== "call-lost"
+                         && appEngine.callState !== "rejected"
                 onClicked: appEngine.hangUp()
             }
         }

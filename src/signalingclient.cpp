@@ -4,6 +4,8 @@
 #include <QJsonObject>
 #include <QUrl>
 #include <QDebug>
+#include <QJsonArray>
+#include <QStringList>
 #include <QtWebSockets/QWebSocket>
 
 SignalingClient::SignalingClient(QObject *parent)
@@ -136,6 +138,14 @@ void SignalingClient::onTextMessageReceived(const QString &message)
         emit hangupReceived(from);
     } else if (type == "reject") {
         emit rejectReceived(from);
+    } else if (type == "peer-disconnected") {
+        emit peerDisconnected(from);
+    } else if (type == "presence") {
+        QStringList online;
+        const QJsonArray arr = obj.value("online").toArray();
+        for (const QJsonValue &v : arr)
+            online.append(v.toString());
+        emit presenceReceived(online);
     } else if (type == "registered") {
         qDebug() << "SAILTALK registered as" << obj.value("id").toString();
     } else if (type == "server-info") {

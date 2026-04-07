@@ -28,6 +28,7 @@ public slots:
     void handleRemoteIceCandidate(const QString &fromPeer, int mlineIndex, const QString &candidate);
     void handleRemoteHangup(const QString &fromPeer);
     void handleRemoteReject(const QString &fromPeer);
+    void handlePeerDisconnected(const QString &fromPeer);
 
 signals:
     void callStateChanged(const QString &state);

@@ -32,6 +32,8 @@ signals:
     void hangupReceived(const QString &fromPeer);
     void rejectReceived(const QString &fromPeer);
     void errorOccurred(const QString &message);
+    void peerDisconnected(const QString &fromPeer);
+    void presenceReceived(const QStringList &onlinePeers);
 
 private slots:
     void onConnected();

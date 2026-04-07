@@ -24,7 +24,7 @@ AppEngine::AppEngine(QObject *parent)
     // Persistent last-used peer ID
     m_peerId = settings.value("identity/peerId").toString();
 
-    m_speakerMode = settings.value("audio/speakerMode", true).toBool();
+    m_speakerMode = settings.value("audio/speakerMode", false).toBool();
 
     // Hardcoded signaling server
     m_signalingUrl = QStringLiteral("ws://192.168.1.90:8585");
@@ -70,6 +70,15 @@ AppEngine::AppEngine(QObject *parent)
 
     connect(m_webrtc, &WebRtcManager::rejectOutgoingCallRequested,
             m_signaling, &SignalingClient::sendReject);
+
+    connect(m_signaling, &SignalingClient::peerDisconnected,
+            m_webrtc, &WebRtcManager::handlePeerDisconnected);
+
+    connect(m_signaling, &SignalingClient::presenceReceived,
+            this, [this](const QStringList &online) {
+                m_onlinePeers = online;
+                emit onlinePeersChanged();
+            });
 
     {
         const QString port = m_speakerMode
@@ -177,4 +186,9 @@ void AppEngine::setSpeakerMode(bool enabled)
                           << port);
 
     emit speakerModeChanged();
+}
+
+QStringList AppEngine::onlinePeers() const
+{
+    return m_onlinePeers;
 }

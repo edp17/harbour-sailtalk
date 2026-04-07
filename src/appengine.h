@@ -16,6 +16,7 @@ class AppEngine : public QObject
     Q_PROPERTY(QString callState READ callState NOTIFY callStateChanged)
     Q_PROPERTY(bool connectedToSignaling READ connectedToSignaling NOTIFY connectedToSignalingChanged)
     Q_PROPERTY(bool speakerMode READ speakerMode WRITE setSpeakerMode NOTIFY speakerModeChanged)
+    Q_PROPERTY(QStringList onlinePeers READ onlinePeers NOTIFY onlinePeersChanged)
 
 public:
     explicit AppEngine(QObject *parent = nullptr);
@@ -34,6 +35,8 @@ public:
     bool speakerMode() const;
     void setSpeakerMode(bool enabled);
 
+    QStringList onlinePeers() const;
+
     Q_INVOKABLE void connectSignaling();
     Q_INVOKABLE void disconnectSignaling();
     Q_INVOKABLE void startOutgoingCall();
@@ -51,6 +54,7 @@ signals:
     void errorOccurred(const QString &message);
     void incomingCall(const QString &fromPeer);
     void speakerModeChanged();
+    void onlinePeersChanged();
 
 private:
     QString m_ownId;
@@ -62,4 +66,5 @@ private:
     SignalingClient *m_signaling;
 
     bool m_speakerMode = true;
+    QStringList m_onlinePeers;
 };

@@ -96,6 +96,20 @@ void WebRtcManager::startCall(const QString &peerId)
     emit callStateChanged(QStringLiteral("dialing"));
 }
 
+void WebRtcManager::handlePeerDisconnected(const QString &fromPeer)
+{
+    qDebug() << "SAILTALK peer disconnected:" << fromPeer;
+
+    Q_UNUSED(fromPeer)
+
+    destroyPipeline();
+    m_currentPeer.clear();
+    m_pendingOfferSdp.clear();
+    m_hasPendingIncomingOffer = false;
+    m_isCaller = false;
+    emit callStateChanged(QStringLiteral("call-lost"));
+}
+
 void WebRtcManager::createOffer()
 {
     qDebug() << "SAILTALK createOffer";
@@ -213,6 +227,7 @@ void WebRtcManager::addIncomingAudioBranch(GstPad *srcPad)
     g_object_set(sink,
                  "stream-properties", streamProps,
                  "client-name", "SailTalk",
+                 "device", "sink.primary_output",
                  nullptr);
     gst_structure_free(streamProps);
 
