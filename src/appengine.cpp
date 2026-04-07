@@ -60,7 +60,7 @@ AppEngine::AppEngine(QObject *parent)
     m_peerId = settings.value("identity/peerId").toString();
 
     // Speaker mode defaults to false = earpiece
-    m_speakerMode = settings.value("audio/speakerMode", false).toBool();
+    m_speakerMode = false;
 
     // Hardcoded signaling server
     m_signalingUrl = QStringLiteral("ws://192.168.1.90:8585");
@@ -267,9 +267,6 @@ void AppEngine::setSpeakerMode(bool enabled)
         return;
 
     m_speakerMode = enabled;
-
-    QSettings settings;
-    settings.setValue("audio/speakerMode", m_speakerMode);
 
     const QString port = m_speakerMode
             ? QStringLiteral("output-speaker")

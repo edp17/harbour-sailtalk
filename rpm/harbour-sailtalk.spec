@@ -1,7 +1,7 @@
 Name:       harbour-sailtalk
 Summary:    Native Sailfish OS voice calling app
 Version:    0.1.0
-Release:    13
+Release:    14
 License:    BSD-3-Clause
 URL:        https://github.com/edp17/harbour-sailtalk
 Source0:    %{name}-%{version}.tar.bz2

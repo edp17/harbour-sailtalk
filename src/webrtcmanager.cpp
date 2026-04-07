@@ -1,6 +1,7 @@
 #include "webrtcmanager.h"
 
 #include <QDebug>
+#include <QString>
 
 #define SAILTALK_VERBOSE_LOG 0
 
@@ -15,6 +16,16 @@ WebRtcManager::WebRtcManager(QObject *parent)
 {
 }
 
+static bool sailTalkHasGstElement(const char *factoryName)
+{
+    GstElementFactory *factory = gst_element_factory_find(factoryName);
+    if (!factory)
+        return false;
+
+    gst_object_unref(factory);
+    return true;
+}
+
 WebRtcManager::~WebRtcManager()
 {
     destroyPipeline();
@@ -26,14 +37,42 @@ void WebRtcManager::createPipeline()
 
     GError *error = nullptr;
 
-    const gchar *pipelineDesc =
-        "webrtcbin name=webrtc stun-server=stun://stun.l.google.com:19302 "
-        "autoaudiosrc ! queue ! volume name=micvolume ! audioconvert ! audioresample ! opusenc ! rtpopuspay pt=111 ! "
-        "application/x-rtp,media=audio,encoding-name=OPUS,payload=111 ! webrtc.";
+    const bool hasWebRtcDsp = sailTalkHasGstElement("webrtcdsp");
+    const bool hasEchoProbe = sailTalkHasGstElement("webrtcechoprobe");
 
-    STV() << "SAILTALK createPipeline";
+    QString pipelineDesc;
 
-    m_pipeline = gst_parse_launch(pipelineDesc, &error);
+    if (hasWebRtcDsp && hasEchoProbe) {
+        qDebug() << "SAILTALK using webrtcdsp + webrtcechoprobe";
+
+        pipelineDesc =
+            "webrtcbin name=webrtc stun-server=stun://stun.l.google.com:19302 "
+            "autoaudiosrc ! queue ! audioconvert ! audioresample ! "
+            "webrtcdsp echo-cancel=true noise-suppression=true high-pass-filter=true "
+            "! volume name=micvolume ! opusenc ! rtpopuspay pt=111 ! "
+            "application/x-rtp,media=audio,encoding-name=OPUS,payload=111 ! webrtc.";
+    } else if (hasWebRtcDsp) {
+        qDebug() << "SAILTALK using webrtcdsp only (no webrtcechoprobe found)";
+
+       pipelineDesc =
+            "webrtcbin name=webrtc stun-server=stun://stun.l.google.com:19302 "
+            "autoaudiosrc ! queue ! audioconvert ! audioresample ! "
+            "webrtcdsp noise-suppression=true high-pass-filter=true "
+            "! volume name=micvolume ! opusenc ! rtpopuspay pt=111 ! "
+            "application/x-rtp,media=audio,encoding-name=OPUS,payload=111 ! webrtc.";
+    } else {
+        qDebug() << "SAILTALK webrtcdsp not available, using basic audio chain";
+
+        pipelineDesc =
+            "webrtcbin name=webrtc stun-server=stun://stun.l.google.com:19302 "
+            "autoaudiosrc ! queue ! audioconvert ! audioresample ! "
+            "volume name=micvolume ! opusenc ! rtpopuspay pt=111 ! "
+            "application/x-rtp,media=audio,encoding-name=OPUS,payload=111 ! webrtc.";
+    }
+
+    qDebug() << "SAILTALK createPipeline";
+
+    m_pipeline = gst_parse_launch(pipelineDesc.toUtf8().constData(), &error);
     if (!m_pipeline) {
         const QString message = error
                 ? QString::fromUtf8(error->message)
@@ -74,6 +113,11 @@ void WebRtcManager::createPipeline()
 
 void WebRtcManager::destroyPipeline()
 {
+    if (m_outputSink) {
+        gst_object_unref(m_outputSink);
+        m_outputSink = nullptr;
+    }
+
     if (m_micVolume) {
         gst_object_unref(m_micVolume);
         m_micVolume = nullptr;
@@ -206,14 +250,15 @@ void WebRtcManager::addIncomingAudioBranch(GstPad *srcPad)
     if (!m_pipeline || !srcPad)
         return;
 
-    STV() << "SAILTALK addIncomingAudioBranch";
+    const bool hasEchoProbe = sailTalkHasGstElement("webrtcechoprobe");
 
     GstElement *queue = gst_element_factory_make("queue", nullptr);
     GstElement *depay = gst_element_factory_make("rtpopusdepay", nullptr);
     GstElement *dec = gst_element_factory_make("opusdec", nullptr);
     GstElement *conv = gst_element_factory_make("audioconvert", nullptr);
     GstElement *resample = gst_element_factory_make("audioresample", nullptr);
-    GstElement *sink = gst_element_factory_make("pulsesink", nullptr);
+    GstElement *echoProbe = hasEchoProbe ? gst_element_factory_make("webrtcechoprobe", nullptr) : nullptr;
+    GstElement *sink = gst_element_factory_make("pulsesink", "callsink");
 
     if (!queue || !depay || !dec || !conv || !resample || !sink) {
         emit errorOccurred(QStringLiteral("Failed to create incoming audio elements"));
@@ -222,6 +267,7 @@ void WebRtcManager::addIncomingAudioBranch(GstPad *srcPad)
         if (dec) gst_object_unref(dec);
         if (conv) gst_object_unref(conv);
         if (resample) gst_object_unref(resample);
+        if (echoProbe) gst_object_unref(echoProbe);
         if (sink) gst_object_unref(sink);
         return;
     }
@@ -239,11 +285,23 @@ void WebRtcManager::addIncomingAudioBranch(GstPad *srcPad)
                  nullptr);
     gst_structure_free(streamProps);
 
-    gst_bin_add_many(GST_BIN(m_pipeline), queue, depay, dec, conv, resample, sink, nullptr);
+    m_outputSink = GST_ELEMENT(gst_object_ref(sink));
 
-    if (!gst_element_link_many(queue, depay, dec, conv, resample, sink, nullptr)) {
-        emit errorOccurred(QStringLiteral("Failed to link incoming audio branch"));
-        return;
+    if (hasEchoProbe && echoProbe) {
+        qDebug() << "SAILTALK using webrtcechoprobe on playback path";
+        gst_bin_add_many(GST_BIN(m_pipeline), queue, depay, dec, conv, resample, echoProbe, sink, nullptr);
+
+        if (!gst_element_link_many(queue, depay, dec, conv, resample, echoProbe, sink, nullptr)) {
+            emit errorOccurred(QStringLiteral("Failed to link incoming audio branch"));
+            return;
+        }
+    } else {
+        gst_bin_add_many(GST_BIN(m_pipeline), queue, depay, dec, conv, resample, sink, nullptr);
+
+        if (!gst_element_link_many(queue, depay, dec, conv, resample, sink, nullptr)) {
+            emit errorOccurred(QStringLiteral("Failed to link incoming audio branch"));
+            return;
+        }
     }
 
     GstPad *queueSinkPad = gst_element_get_static_pad(queue, "sink");
@@ -265,6 +323,8 @@ void WebRtcManager::addIncomingAudioBranch(GstPad *srcPad)
     gst_element_sync_state_with_parent(dec);
     gst_element_sync_state_with_parent(conv);
     gst_element_sync_state_with_parent(resample);
+    if (hasEchoProbe && echoProbe)
+        gst_element_sync_state_with_parent(echoProbe);
     gst_element_sync_state_with_parent(sink);
 }
 
