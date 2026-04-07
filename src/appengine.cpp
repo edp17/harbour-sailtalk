@@ -30,7 +30,13 @@ AppEngine::AppEngine(QObject *parent)
     m_signalingUrl = QStringLiteral("ws://192.168.1.90:8585");
 
     connect(m_signaling, &SignalingClient::connectedChanged,
-            this, &AppEngine::connectedToSignalingChanged);
+            this, [this]() {
+                emit connectedToSignalingChanged();
+
+                if (!m_signaling->isConnected() && m_callState != QStringLiteral("idle")) {
+                    m_webrtc->hangUp();
+                }
+            });
 
     connect(m_signaling, &SignalingClient::errorOccurred,
             this, &AppEngine::errorOccurred);
@@ -129,6 +135,9 @@ void AppEngine::connectSignaling()
 
 void AppEngine::disconnectSignaling()
 {
+    // Tear down any active or pending call locally first.
+    m_webrtc->hangUp();
+
     m_signaling->disconnectFromServer();
 }
 
