@@ -97,6 +97,13 @@ Page {
 
             Label {
                 width: parent.width
+                visible: appEngine.callState === "connected"
+                text: qsTr("Call duration: %1").arg(appEngine.callDuration)
+                color: Theme.highlightColor
+            }
+
+            Label {
+                width: parent.width
                 visible: appEngine.callState === "call-lost"
                 color: Theme.errorColor
                 text: qsTr("Call lost")

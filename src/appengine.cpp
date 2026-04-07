@@ -3,16 +3,51 @@
 #include "signalingclient.h"
 
 #include <QProcess>
-#include <QUuid>
 #include <QSettings>
+#include <QUuid>
 
 AppEngine::AppEngine(QObject *parent)
     : QObject(parent),
       m_callState("idle"),
+      m_speakerMode(false),
+      m_callDuration(QStringLiteral("00:00")),
       m_webrtc(new WebRtcManager(this)),
       m_signaling(new SignalingClient(this))
 {
     QSettings settings;
+
+    m_callDurationTimer = new QTimer(this);
+    m_callDurationTimer->setInterval(1000);
+
+    connect(m_callDurationTimer, &QTimer::timeout, this, [this]() {
+        if (!m_callElapsedTimer.isValid())
+            return;
+
+        const qint64 elapsedMs = m_callElapsedTimer.elapsed();
+        const qint64 totalSeconds = elapsedMs / 1000;
+        const qint64 minutes = totalSeconds / 60;
+        const qint64 seconds = totalSeconds % 60;
+
+        QString newDuration;
+        if (totalSeconds < 3600) {
+            newDuration = QStringLiteral("%1:%2")
+                    .arg(minutes, 2, 10, QLatin1Char('0'))
+                    .arg(seconds, 2, 10, QLatin1Char('0'));
+        } else {
+            const qint64 hours = totalSeconds / 3600;
+            const qint64 remainingMinutes = (totalSeconds % 3600) / 60;
+
+            newDuration = QStringLiteral("%1:%2:%3")
+                    .arg(hours, 2, 10, QLatin1Char('0'))
+                    .arg(remainingMinutes, 2, 10, QLatin1Char('0'))
+                    .arg(seconds, 2, 10, QLatin1Char('0'));
+        }
+
+        if (m_callDuration != newDuration) {
+            m_callDuration = newDuration;
+            emit callDurationChanged();
+        }
+    });
 
     // Persistent own device ID
     m_ownId = settings.value("identity/ownId").toString();
@@ -24,6 +59,7 @@ AppEngine::AppEngine(QObject *parent)
     // Persistent last-used peer ID
     m_peerId = settings.value("identity/peerId").toString();
 
+    // Speaker mode defaults to false = earpiece
     m_speakerMode = settings.value("audio/speakerMode", false).toBool();
 
     // Hardcoded signaling server
@@ -41,10 +77,42 @@ AppEngine::AppEngine(QObject *parent)
     connect(m_signaling, &SignalingClient::errorOccurred,
             this, &AppEngine::errorOccurred);
 
+    connect(m_signaling, &SignalingClient::presenceReceived,
+            this, [this](const QStringList &online) {
+                m_onlinePeers = online;
+                emit onlinePeersChanged();
+            });
+
     connect(m_webrtc, &WebRtcManager::callStateChanged,
             this, [this](const QString &state) {
+                const QString previousState = m_callState;
                 m_callState = state;
                 emit callStateChanged();
+
+                if (state == QStringLiteral("connected")) {
+                    m_callElapsedTimer.start();
+
+                    if (m_callDuration != QStringLiteral("00:00")) {
+                        m_callDuration = QStringLiteral("00:00");
+                        emit callDurationChanged();
+                    }
+
+                    if (!m_callDurationTimer->isActive())
+                        m_callDurationTimer->start();
+                } else if (previousState == QStringLiteral("connected")
+                           || state == QStringLiteral("idle")
+                           || state == QStringLiteral("call-lost")
+                           || state == QStringLiteral("rejected")) {
+                    if (m_callDurationTimer->isActive())
+                        m_callDurationTimer->stop();
+
+                    m_callElapsedTimer.invalidate();
+
+                    if (m_callDuration != QStringLiteral("00:00")) {
+                        m_callDuration = QStringLiteral("00:00");
+                        emit callDurationChanged();
+                    }
+                }
             });
 
     connect(m_webrtc, &WebRtcManager::errorOccurred,
@@ -59,6 +127,15 @@ AppEngine::AppEngine(QObject *parent)
     connect(m_signaling, &SignalingClient::iceCandidateReceived,
             m_webrtc, &WebRtcManager::handleRemoteIceCandidate);
 
+    connect(m_signaling, &SignalingClient::hangupReceived,
+            m_webrtc, &WebRtcManager::handleRemoteHangup);
+
+    connect(m_signaling, &SignalingClient::rejectReceived,
+            m_webrtc, &WebRtcManager::handleRemoteReject);
+
+    connect(m_signaling, &SignalingClient::peerDisconnected,
+            m_webrtc, &WebRtcManager::handlePeerDisconnected);
+
     connect(m_webrtc, &WebRtcManager::localOfferReady,
             m_signaling, &SignalingClient::sendOffer);
 
@@ -68,24 +145,10 @@ AppEngine::AppEngine(QObject *parent)
     connect(m_webrtc, &WebRtcManager::localIceCandidateReady,
             m_signaling, &SignalingClient::sendIceCandidate);
 
-    connect(m_signaling, &SignalingClient::hangupReceived,
-            m_webrtc, &WebRtcManager::handleRemoteHangup);
-
-    connect(m_signaling, &SignalingClient::rejectReceived,
-            m_webrtc, &WebRtcManager::handleRemoteReject);
-
     connect(m_webrtc, &WebRtcManager::rejectOutgoingCallRequested,
             m_signaling, &SignalingClient::sendReject);
 
-    connect(m_signaling, &SignalingClient::peerDisconnected,
-            m_webrtc, &WebRtcManager::handlePeerDisconnected);
-
-    connect(m_signaling, &SignalingClient::presenceReceived,
-            this, [this](const QStringList &online) {
-                m_onlinePeers = online;
-                emit onlinePeersChanged();
-            });
-
+    // Apply saved audio route on startup
     {
         const QString port = m_speakerMode
                 ? QStringLiteral("output-speaker")
@@ -101,11 +164,30 @@ AppEngine::AppEngine(QObject *parent)
 
 AppEngine::~AppEngine() = default;
 
-QString AppEngine::ownId() const { return m_ownId; }
-QString AppEngine::peerId() const { return m_peerId; }
-QString AppEngine::signalingUrl() const { return m_signalingUrl; }
-QString AppEngine::callState() const { return m_callState; }
-bool AppEngine::connectedToSignaling() const { return m_signaling->isConnected(); }
+QString AppEngine::ownId() const
+{
+    return m_ownId;
+}
+
+QString AppEngine::peerId() const
+{
+    return m_peerId;
+}
+
+QString AppEngine::signalingUrl() const
+{
+    return m_signalingUrl;
+}
+
+QString AppEngine::callState() const
+{
+    return m_callState;
+}
+
+bool AppEngine::connectedToSignaling() const
+{
+    return m_signaling->isConnected();
+}
 
 void AppEngine::setPeerId(const QString &value)
 {
@@ -124,6 +206,7 @@ void AppEngine::setSignalingUrl(const QString &value)
 {
     if (m_signalingUrl == value)
         return;
+
     m_signalingUrl = value;
     emit signalingUrlChanged();
 }
@@ -135,9 +218,7 @@ void AppEngine::connectSignaling()
 
 void AppEngine::disconnectSignaling()
 {
-    // Tear down any active or pending call locally first.
     m_webrtc->hangUp();
-
     m_signaling->disconnectFromServer();
 }
 
@@ -200,4 +281,9 @@ void AppEngine::setSpeakerMode(bool enabled)
 QStringList AppEngine::onlinePeers() const
 {
     return m_onlinePeers;
+}
+
+QString AppEngine::callDuration() const
+{
+    return m_callDuration;
 }

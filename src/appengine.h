@@ -2,6 +2,8 @@
 
 #include <QObject>
 #include <QString>
+#include <QElapsedTimer>
+#include <QTimer>
 
 class WebRtcManager;
 class SignalingClient;
@@ -17,6 +19,7 @@ class AppEngine : public QObject
     Q_PROPERTY(bool connectedToSignaling READ connectedToSignaling NOTIFY connectedToSignalingChanged)
     Q_PROPERTY(bool speakerMode READ speakerMode WRITE setSpeakerMode NOTIFY speakerModeChanged)
     Q_PROPERTY(QStringList onlinePeers READ onlinePeers NOTIFY onlinePeersChanged)
+    Q_PROPERTY(QString callDuration READ callDuration NOTIFY callDurationChanged)
 
 public:
     explicit AppEngine(QObject *parent = nullptr);
@@ -36,6 +39,7 @@ public:
     void setSpeakerMode(bool enabled);
 
     QStringList onlinePeers() const;
+    QString callDuration() const;
 
     Q_INVOKABLE void connectSignaling();
     Q_INVOKABLE void disconnectSignaling();
@@ -55,6 +59,7 @@ signals:
     void incomingCall(const QString &fromPeer);
     void speakerModeChanged();
     void onlinePeersChanged();
+    void callDurationChanged();
 
 private:
     QString m_ownId;
@@ -67,4 +72,7 @@ private:
 
     bool m_speakerMode = true;
     QStringList m_onlinePeers;
+    QString m_callDuration;
+    QElapsedTimer m_callElapsedTimer;
+    QTimer *m_callDurationTimer = nullptr;
 };
