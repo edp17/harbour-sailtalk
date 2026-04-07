@@ -58,6 +58,9 @@ AppEngine::AppEngine(QObject *parent)
 
     connect(m_webrtc, &WebRtcManager::localIceCandidateReady,
             m_signaling, &SignalingClient::sendIceCandidate);
+
+    connect(m_signaling, &SignalingClient::hangupReceived,
+            m_webrtc, &WebRtcManager::handleRemoteHangup);
 }
 
 AppEngine::~AppEngine() = default;
@@ -106,6 +109,9 @@ void AppEngine::startOutgoingCall()
 
 void AppEngine::hangUp()
 {
+    if (!m_peerId.isEmpty())
+        m_signaling->sendHangup(m_peerId);
+
     m_webrtc->hangUp();
 }
 

@@ -21,12 +21,14 @@ public slots:
     void sendOffer(const QString &toPeer, const QString &sdp);
     void sendAnswer(const QString &toPeer, const QString &sdp);
     void sendIceCandidate(const QString &toPeer, int mlineIndex, const QString &candidate);
+    void sendHangup(const QString &toPeer);
 
 signals:
     void connectedChanged();
     void offerReceived(const QString &fromPeer, const QString &sdp);
     void answerReceived(const QString &fromPeer, const QString &sdp);
     void iceCandidateReceived(const QString &fromPeer, int mlineIndex, const QString &candidate);
+    void hangupReceived(const QString &fromPeer);
     void errorOccurred(const QString &message);
 
 private slots:

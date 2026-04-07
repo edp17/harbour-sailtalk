@@ -262,6 +262,18 @@ void WebRtcManager::onPadAdded(GstElement *, GstPad *newPad, gpointer user_data)
     }
 }
 
+void WebRtcManager::handleRemoteHangup(const QString &fromPeer)
+{
+    qDebug() << "SAILTALK received hangup from" << fromPeer;
+
+    Q_UNUSED(fromPeer)
+
+    destroyPipeline();
+    m_currentPeer.clear();
+    m_isCaller = false;
+    emit callStateChanged(QStringLiteral("idle"));
+}
+
 void WebRtcManager::handleRemoteOffer(const QString &fromPeer, const QString &sdp)
 {
     qDebug() << "SAILTALK received offer from" << fromPeer;

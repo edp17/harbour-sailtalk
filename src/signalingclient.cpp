@@ -100,6 +100,17 @@ void SignalingClient::sendIceCandidate(const QString &toPeer, int mlineIndex, co
     sendJson(QJsonDocument(obj).toJson(QJsonDocument::Compact));
 }
 
+void SignalingClient::sendHangup(const QString &toPeer)
+{
+    qDebug() << "SAILTALK sendHangup to =" << toPeer;
+
+    QJsonObject obj;
+    obj["type"] = "hangup";
+    obj["to"] = toPeer;
+    obj["from"] = m_ownId;
+    sendJson(QJsonDocument(obj).toJson(QJsonDocument::Compact));
+}
+
 void SignalingClient::onTextMessageReceived(const QString &message)
 {
     qDebug() << "SAILTALK onTextMessageReceived raw =" << message;
@@ -124,6 +135,8 @@ void SignalingClient::onTextMessageReceived(const QString &message)
             obj.value("sdpMLineIndex").toInt(),
             obj.value("candidate").toString()
         );
+    } else if (type == "hangup") {
+        emit hangupReceived(from);
     } else if (type == "registered") {
         qDebug() << "SAILTALK registered as" << obj.value("id").toString();
     } else if (type == "server-info") {
