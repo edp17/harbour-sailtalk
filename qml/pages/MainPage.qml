@@ -122,6 +122,13 @@ Page {
                 onClicked: appEngine.rejectIncomingCall()
             }
 
+            TextSwitch {
+                width: parent.width
+                visible: appEngine.callState === "connected" || appEngine.callState === "connecting"
+                text: qsTr("Mute microphone")
+                onCheckedChanged: appEngine.setMute(checked)
+            }
+
             Button {
                 width: parent.width
                 text: qsTr("Hang up")

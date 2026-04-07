@@ -20,7 +20,7 @@ void WebRtcManager::createPipeline()
 
     const gchar *pipelineDesc =
         "webrtcbin name=webrtc stun-server=stun://stun.l.google.com:19302 "
-        "autoaudiosrc ! queue ! audioconvert ! audioresample ! opusenc ! rtpopuspay pt=111 ! "
+        "autoaudiosrc ! queue ! volume name=micvolume ! audioconvert ! audioresample ! opusenc ! rtpopuspay pt=111 ! "
         "application/x-rtp,media=audio,encoding-name=OPUS,payload=111 ! webrtc.";
 
     qDebug() << "SAILTALK createPipeline";
@@ -43,6 +43,13 @@ void WebRtcManager::createPipeline()
         return;
     }
 
+    m_micVolume = gst_bin_get_by_name(GST_BIN(m_pipeline), "micvolume");
+    if (!m_micVolume) {
+        emit errorOccurred(QStringLiteral("Failed to find micvolume element in pipeline"));
+        destroyPipeline();
+        return;
+    }
+
     g_signal_connect(m_webrtcbin, "on-negotiation-needed",
                      G_CALLBACK(WebRtcManager::onNegotiationNeeded), this);
 
@@ -52,11 +59,18 @@ void WebRtcManager::createPipeline()
     g_signal_connect(m_webrtcbin, "pad-added",
                      G_CALLBACK(WebRtcManager::onPadAdded), this);
 
+    g_object_set(m_micVolume, "mute", m_muted ? TRUE : FALSE, nullptr);
+
     gst_element_set_state(m_pipeline, GST_STATE_PLAYING);
 }
 
 void WebRtcManager::destroyPipeline()
 {
+    if (m_micVolume) {
+        gst_object_unref(m_micVolume);
+        m_micVolume = nullptr;
+    }
+
     if (m_webrtcbin) {
         gst_object_unref(m_webrtcbin);
         m_webrtcbin = nullptr;
@@ -406,4 +420,10 @@ void WebRtcManager::hangUp()
 void WebRtcManager::setMute(bool mute)
 {
     m_muted = mute;
+
+    qDebug() << "SAILTALK setMute =" << m_muted;
+
+    if (m_micVolume) {
+        g_object_set(m_micVolume, "mute", m_muted ? TRUE : FALSE, nullptr);
+    }
 }

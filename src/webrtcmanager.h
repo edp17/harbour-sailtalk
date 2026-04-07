@@ -58,4 +58,5 @@ private:
 
     GstElement *m_pipeline = nullptr;
     GstElement *m_webrtcbin = nullptr;
+    GstElement *m_micVolume = nullptr;
 };
