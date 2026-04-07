@@ -20,7 +20,7 @@ void WebRtcManager::createPipeline()
 
     const gchar *pipelineDesc =
         "webrtcbin name=webrtc stun-server=stun://stun.l.google.com:19302 "
-        "autoaudiosrc ! audioconvert ! audioresample ! opusenc ! rtpopuspay pt=111 ! "
+        "autoaudiosrc ! queue ! audioconvert ! audioresample ! opusenc ! rtpopuspay pt=111 ! "
         "application/x-rtp,media=audio,encoding-name=OPUS,payload=111 ! webrtc.";
 
     qDebug() << "SAILTALK createPipeline";
@@ -49,6 +49,9 @@ void WebRtcManager::createPipeline()
     g_signal_connect(m_webrtcbin, "on-ice-candidate",
                      G_CALLBACK(WebRtcManager::onIceCandidate), this);
 
+    g_signal_connect(m_webrtcbin, "pad-added",
+                     G_CALLBACK(WebRtcManager::onPadAdded), this);
+
     gst_element_set_state(m_pipeline, GST_STATE_PLAYING);
 }
 
@@ -70,10 +73,10 @@ void WebRtcManager::startCall(const QString &peerId)
 {
     qDebug() << "SAILTALK startCall peerId =" << peerId;
 
+    m_isCaller = true;
     m_currentPeer = peerId;
     createPipeline();
 
-    m_isCaller = true;
     emit callStateChanged(QStringLiteral("dialing"));
 }
 
@@ -103,7 +106,6 @@ void WebRtcManager::createOffer()
                 return;
             }
 
-            // Important: set local description too
             g_signal_emit_by_name(self->m_webrtcbin, "set-local-description", offer, nullptr);
 
             gchar *sdp = gst_sdp_message_as_text(offer->sdp);
@@ -145,7 +147,6 @@ void WebRtcManager::createAnswer()
                 return;
             }
 
-            // Important: set local description too
             g_signal_emit_by_name(self->m_webrtcbin, "set-local-description", answer, nullptr);
 
             gchar *sdp = gst_sdp_message_as_text(answer->sdp);
@@ -160,6 +161,60 @@ void WebRtcManager::createAnswer()
         nullptr);
 
     g_signal_emit_by_name(m_webrtcbin, "create-answer", nullptr, promise);
+}
+
+void WebRtcManager::addIncomingAudioBranch(GstPad *srcPad)
+{
+    if (!m_pipeline || !srcPad)
+        return;
+
+    qDebug() << "SAILTALK addIncomingAudioBranch";
+
+    GstElement *queue = gst_element_factory_make("queue", nullptr);
+    GstElement *depay = gst_element_factory_make("rtpopusdepay", nullptr);
+    GstElement *dec = gst_element_factory_make("opusdec", nullptr);
+    GstElement *conv = gst_element_factory_make("audioconvert", nullptr);
+    GstElement *resample = gst_element_factory_make("audioresample", nullptr);
+    GstElement *sink = gst_element_factory_make("autoaudiosink", nullptr);
+
+    if (!queue || !depay || !dec || !conv || !resample || !sink) {
+        emit errorOccurred(QStringLiteral("Failed to create incoming audio elements"));
+        if (queue) gst_object_unref(queue);
+        if (depay) gst_object_unref(depay);
+        if (dec) gst_object_unref(dec);
+        if (conv) gst_object_unref(conv);
+        if (resample) gst_object_unref(resample);
+        if (sink) gst_object_unref(sink);
+        return;
+    }
+
+    gst_bin_add_many(GST_BIN(m_pipeline), queue, depay, dec, conv, resample, sink, nullptr);
+
+    if (!gst_element_link_many(queue, depay, dec, conv, resample, sink, nullptr)) {
+        emit errorOccurred(QStringLiteral("Failed to link incoming audio branch"));
+        return;
+    }
+
+    GstPad *queueSinkPad = gst_element_get_static_pad(queue, "sink");
+    if (!queueSinkPad) {
+        emit errorOccurred(QStringLiteral("Failed to get queue sink pad"));
+        return;
+    }
+
+    GstPadLinkReturn linkRet = gst_pad_link(srcPad, queueSinkPad);
+    gst_object_unref(queueSinkPad);
+
+    if (linkRet != GST_PAD_LINK_OK) {
+        emit errorOccurred(QStringLiteral("Failed to link incoming WebRTC pad to audio branch"));
+        return;
+    }
+
+    gst_element_sync_state_with_parent(queue);
+    gst_element_sync_state_with_parent(depay);
+    gst_element_sync_state_with_parent(dec);
+    gst_element_sync_state_with_parent(conv);
+    gst_element_sync_state_with_parent(resample);
+    gst_element_sync_state_with_parent(sink);
 }
 
 void WebRtcManager::onNegotiationNeeded(GstElement *, gpointer user_data)
@@ -183,13 +238,37 @@ void WebRtcManager::onIceCandidate(GstElement *, guint mlineindex, gchar *candid
     );
 }
 
+void WebRtcManager::onPadAdded(GstElement *, GstPad *newPad, gpointer user_data)
+{
+    auto *self = static_cast<WebRtcManager *>(user_data);
+
+    GstCaps *caps = gst_pad_get_current_caps(newPad);
+    if (!caps)
+        caps = gst_pad_query_caps(newPad, nullptr);
+
+    QString capsString;
+    if (caps) {
+        gchar *capsText = gst_caps_to_string(caps);
+        capsString = QString::fromUtf8(capsText);
+        g_free(capsText);
+        gst_caps_unref(caps);
+    }
+
+    qDebug() << "SAILTALK onPadAdded caps =" << capsString;
+
+    if (capsString.contains(QStringLiteral("application/x-rtp")) &&
+        capsString.contains(QStringLiteral("media=(string)audio"))) {
+        self->addIncomingAudioBranch(newPad);
+    }
+}
+
 void WebRtcManager::handleRemoteOffer(const QString &fromPeer, const QString &sdp)
 {
     qDebug() << "SAILTALK received offer from" << fromPeer;
 
+    m_isCaller = false;
     m_currentPeer = fromPeer;
     createPipeline();
-    m_isCaller = false;
 
     emit callStateChanged(QStringLiteral("incoming"));
 
@@ -207,7 +286,6 @@ void WebRtcManager::handleRemoteOffer(const QString &fromPeer, const QString &sd
     g_signal_emit_by_name(m_webrtcbin, "set-remote-description", offer, nullptr);
 
     createAnswer();
-
     emit callStateChanged(QStringLiteral("connecting"));
 
     gst_webrtc_session_description_free(offer);
@@ -238,8 +316,7 @@ void WebRtcManager::handleRemoteAnswer(const QString &fromPeer, const QString &s
 void WebRtcManager::handleRemoteIceCandidate(const QString &fromPeer, int mlineIndex, const QString &candidate)
 {
     qDebug() << "SAILTALK received ICE from" << fromPeer
-             << "mline =" << mlineIndex
-             << "candidate =" << candidate;
+             << "mline =" << mlineIndex;
 
     if (!m_webrtcbin)
         return;
@@ -255,6 +332,7 @@ void WebRtcManager::hangUp()
 
     destroyPipeline();
     m_currentPeer.clear();
+    m_isCaller = false;
     emit callStateChanged(QStringLiteral("idle"));
 }
 

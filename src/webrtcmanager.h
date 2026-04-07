@@ -38,9 +38,11 @@ private:
 
     void createOffer();
     void createAnswer();
+    void addIncomingAudioBranch(GstPad *srcPad);
 
     static void onNegotiationNeeded(GstElement *webrtc, gpointer user_data);
     static void onIceCandidate(GstElement *webrtc, guint mlineindex, gchar *candidate, gpointer user_data);
+    static void onPadAdded(GstElement *webrtc, GstPad *newPad, gpointer user_data);
 
     QString m_currentPeer;
     bool m_muted = false;

@@ -37,6 +37,8 @@ add_executable(harbour-sailtalk
     ${HEADERS}
 )
 
+target_compile_definitions(harbour-sailtalk PRIVATE GST_USE_UNSTABLE_API)
+
 target_include_directories(harbour-sailtalk PRIVATE
     ${GSTREAMER_INCLUDE_DIRS}
     ${GLIB2_INCLUDE_DIRS}
