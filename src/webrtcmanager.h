@@ -28,6 +28,7 @@ public slots:
     void handleRemoteHangup(const QString &fromPeer);
     void handleRemoteReject(const QString &fromPeer);
     void handlePeerDisconnected(const QString &fromPeer);
+    void handleRemoteBusy(const QString &fromPeer);
 
 signals:
     void callStateChanged(const QString &state);
@@ -37,6 +38,7 @@ signals:
     void localAnswerReady(const QString &toPeer, const QString &sdp);
     void localIceCandidateReady(const QString &toPeer, int mlineIndex, const QString &candidate);
     void rejectOutgoingCallRequested(const QString &toPeer);
+    void busyOutgoingCallRequested(const QString &toPeer);
 
 private:
     void createPipeline();

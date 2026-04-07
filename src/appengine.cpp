@@ -148,6 +148,12 @@ AppEngine::AppEngine(QObject *parent)
     connect(m_webrtc, &WebRtcManager::rejectOutgoingCallRequested,
             m_signaling, &SignalingClient::sendReject);
 
+    connect(m_signaling, &SignalingClient::busyReceived,
+            m_webrtc, &WebRtcManager::handleRemoteBusy);
+
+    connect(m_webrtc, &WebRtcManager::busyOutgoingCallRequested,
+            m_signaling, &SignalingClient::sendBusy);
+
     // Apply saved audio route on startup
     {
         const QString port = m_speakerMode

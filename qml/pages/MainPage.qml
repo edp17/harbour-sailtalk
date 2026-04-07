@@ -109,6 +109,13 @@ Page {
                 text: qsTr("Call lost")
             }
 
+            Label {
+                width: parent.width
+                visible: appEngine.callState === "busy"
+                color: Theme.errorColor
+                text: qsTr("Peer is busy")
+            }
+
             Button {
                 width: parent.width
                 text: appEngine.connectedToSignaling
@@ -129,10 +136,12 @@ Page {
                          && peerField.text.length > 0
                          && (appEngine.callState === "idle"
                              || appEngine.callState === "call-lost"
-                             || appEngine.callState === "rejected")
+                             || appEngine.callState === "rejected"
+                             || appEngine.callState === "busy")
                 visible: appEngine.callState === "idle"
                          || appEngine.callState === "call-lost"
                          || appEngine.callState === "rejected"
+                         || appEngine.callState === "busy"
                 onClicked: appEngine.startOutgoingCall()
             }
 
@@ -172,6 +181,7 @@ Page {
                          && appEngine.callState !== "incoming"
                          && appEngine.callState !== "call-lost"
                          && appEngine.callState !== "rejected"
+                         && appEngine.callState !== "busy"
                 onClicked: appEngine.hangUp()
             }
         }

@@ -365,7 +365,8 @@ void WebRtcManager::handleRemoteOffer(const QString &fromPeer, const QString &sd
     qDebug() << "SAILTALK received offer from" << fromPeer;
 
     if (m_pipeline || m_hasPendingIncomingOffer || !m_currentPeer.isEmpty()) {
-        STV() << "SAILTALK busy, ignoring incoming offer";
+        qDebug() << "SAILTALK busy, rejecting incoming offer from" << fromPeer;
+        emit busyOutgoingCallRequested(fromPeer);
         return;
     }
 
@@ -375,6 +376,20 @@ void WebRtcManager::handleRemoteOffer(const QString &fromPeer, const QString &sd
     m_hasPendingIncomingOffer = true;
 
     emit callStateChanged(QStringLiteral("incoming"));
+}
+
+void WebRtcManager::handleRemoteBusy(const QString &fromPeer)
+{
+    qDebug() << "SAILTALK received busy from" << fromPeer;
+
+    Q_UNUSED(fromPeer)
+
+    destroyPipeline();
+    m_currentPeer.clear();
+    m_pendingOfferSdp.clear();
+    m_hasPendingIncomingOffer = false;
+    m_isCaller = false;
+    emit callStateChanged(QStringLiteral("busy"));
 }
 
 void WebRtcManager::handleRemoteAnswer(const QString &fromPeer, const QString &sdp)

@@ -120,6 +120,15 @@ void SignalingClient::sendReject(const QString &toPeer)
     sendJson(QJsonDocument(obj).toJson(QJsonDocument::Compact));
 }
 
+void SignalingClient::sendBusy(const QString &toPeer)
+{
+    QJsonObject obj;
+    obj["type"] = "busy";
+    obj["to"] = toPeer;
+    obj["from"] = m_ownId;
+    sendJson(QJsonDocument(obj).toJson(QJsonDocument::Compact));
+}
+
 void SignalingClient::onTextMessageReceived(const QString &message)
 {
     const auto doc = QJsonDocument::fromJson(message.toUtf8());
@@ -146,6 +155,8 @@ void SignalingClient::onTextMessageReceived(const QString &message)
         emit hangupReceived(from);
     } else if (type == "reject") {
         emit rejectReceived(from);
+    } else if (type == "busy") {
+        emit busyReceived(from);
     } else if (type == "peer-disconnected") {
         emit peerDisconnected(from);
     } else if (type == "presence") {
@@ -157,7 +168,7 @@ void SignalingClient::onTextMessageReceived(const QString &message)
     } else if (type == "registered") {
         qDebug() << "SAILTALK registered as" << obj.value("id").toString();
     } else if (type == "server-info") {
-        STV() << "SAILTALK server-info:" << obj.value("message").toString();
+        qDebug() << "SAILTALK server-info:" << obj.value("message").toString();
     } else if (type == "error") {
         emit errorOccurred(obj.value("message").toString());
     } else {

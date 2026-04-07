@@ -23,6 +23,7 @@ public slots:
     void sendIceCandidate(const QString &toPeer, int mlineIndex, const QString &candidate);
     void sendHangup(const QString &toPeer);
     void sendReject(const QString &toPeer);
+    void sendBusy(const QString &toPeer);
 
 signals:
     void connectedChanged();
@@ -31,9 +32,10 @@ signals:
     void iceCandidateReceived(const QString &fromPeer, int mlineIndex, const QString &candidate);
     void hangupReceived(const QString &fromPeer);
     void rejectReceived(const QString &fromPeer);
-    void errorOccurred(const QString &message);
+    void busyReceived(const QString &fromPeer);
     void peerDisconnected(const QString &fromPeer);
     void presenceReceived(const QStringList &onlinePeers);
+    void errorOccurred(const QString &message);
 
 private slots:
     void onConnected();
