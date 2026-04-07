@@ -35,6 +35,8 @@ public:
     Q_INVOKABLE void startOutgoingCall();
     Q_INVOKABLE void hangUp();
     Q_INVOKABLE void setMute(bool mute);
+    Q_INVOKABLE void acceptIncomingCall();
+    Q_INVOKABLE void rejectIncomingCall();
 
 signals:
     void ownIdChanged();

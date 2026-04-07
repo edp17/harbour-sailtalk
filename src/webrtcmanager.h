@@ -19,11 +19,15 @@ public:
     void hangUp();
     void setMute(bool mute);
 
+    void acceptIncomingCall();
+    void rejectIncomingCall();
+
 public slots:
     void handleRemoteOffer(const QString &fromPeer, const QString &sdp);
     void handleRemoteAnswer(const QString &fromPeer, const QString &sdp);
     void handleRemoteIceCandidate(const QString &fromPeer, int mlineIndex, const QString &candidate);
     void handleRemoteHangup(const QString &fromPeer);
+    void handleRemoteReject(const QString &fromPeer);
 
 signals:
     void callStateChanged(const QString &state);
@@ -32,6 +36,7 @@ signals:
     void localOfferReady(const QString &toPeer, const QString &sdp);
     void localAnswerReady(const QString &toPeer, const QString &sdp);
     void localIceCandidateReady(const QString &toPeer, int mlineIndex, const QString &candidate);
+    void rejectOutgoingCallRequested(const QString &toPeer);
 
 private:
     void createPipeline();
@@ -46,6 +51,8 @@ private:
     static void onPadAdded(GstElement *webrtc, GstPad *newPad, gpointer user_data);
 
     QString m_currentPeer;
+    QString m_pendingOfferSdp;
+    bool m_hasPendingIncomingOffer = false;
     bool m_muted = false;
     bool m_isCaller = false;
 

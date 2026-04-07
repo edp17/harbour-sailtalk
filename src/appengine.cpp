@@ -61,6 +61,12 @@ AppEngine::AppEngine(QObject *parent)
 
     connect(m_signaling, &SignalingClient::hangupReceived,
             m_webrtc, &WebRtcManager::handleRemoteHangup);
+
+    connect(m_signaling, &SignalingClient::rejectReceived,
+            m_webrtc, &WebRtcManager::handleRemoteReject);
+
+    connect(m_webrtc, &WebRtcManager::rejectOutgoingCallRequested,
+            m_signaling, &SignalingClient::sendReject);
 }
 
 AppEngine::~AppEngine() = default;
@@ -118,4 +124,14 @@ void AppEngine::hangUp()
 void AppEngine::setMute(bool mute)
 {
     m_webrtc->setMute(mute);
+}
+
+void AppEngine::acceptIncomingCall()
+{
+    m_webrtc->acceptIncomingCall();
+}
+
+void AppEngine::rejectIncomingCall()
+{
+    m_webrtc->rejectIncomingCall();
 }

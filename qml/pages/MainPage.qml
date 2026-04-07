@@ -101,13 +101,31 @@ Page {
             Button {
                 width: parent.width
                 text: qsTr("Start audio call")
-                enabled: appEngine.connectedToSignaling && peerField.text.length > 0
+                enabled: appEngine.connectedToSignaling
+                         && peerField.text.length > 0
+                         && appEngine.callState === "idle"
+                visible: appEngine.callState === "idle"
                 onClicked: appEngine.startOutgoingCall()
             }
 
             Button {
                 width: parent.width
+                text: qsTr("Accept incoming call")
+                visible: appEngine.callState === "incoming"
+                onClicked: appEngine.acceptIncomingCall()
+            }
+
+            Button {
+                width: parent.width
+                text: qsTr("Reject incoming call")
+                visible: appEngine.callState === "incoming"
+                onClicked: appEngine.rejectIncomingCall()
+            }
+
+            Button {
+                width: parent.width
                 text: qsTr("Hang up")
+                visible: appEngine.callState !== "idle" && appEngine.callState !== "incoming"
                 onClicked: appEngine.hangUp()
             }
         }

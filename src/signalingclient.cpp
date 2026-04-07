@@ -63,8 +63,6 @@ void SignalingClient::onDisconnected()
 
 void SignalingClient::sendOffer(const QString &toPeer, const QString &sdp)
 {
-    qDebug() << "SAILTALK sendOffer to =" << toPeer << "sdp =" << sdp;
-
     QJsonObject obj;
     obj["type"] = "offer";
     obj["to"] = toPeer;
@@ -75,8 +73,6 @@ void SignalingClient::sendOffer(const QString &toPeer, const QString &sdp)
 
 void SignalingClient::sendAnswer(const QString &toPeer, const QString &sdp)
 {
-    qDebug() << "SAILTALK sendAnswer to =" << toPeer << "sdp =" << sdp;
-
     QJsonObject obj;
     obj["type"] = "answer";
     obj["to"] = toPeer;
@@ -87,10 +83,6 @@ void SignalingClient::sendAnswer(const QString &toPeer, const QString &sdp)
 
 void SignalingClient::sendIceCandidate(const QString &toPeer, int mlineIndex, const QString &candidate)
 {
-    qDebug() << "SAILTALK sendIceCandidate to =" << toPeer
-             << "mline =" << mlineIndex
-             << "candidate =" << candidate;
-
     QJsonObject obj;
     obj["type"] = "ice";
     obj["to"] = toPeer;
@@ -102,8 +94,6 @@ void SignalingClient::sendIceCandidate(const QString &toPeer, int mlineIndex, co
 
 void SignalingClient::sendHangup(const QString &toPeer)
 {
-    qDebug() << "SAILTALK sendHangup to =" << toPeer;
-
     QJsonObject obj;
     obj["type"] = "hangup";
     obj["to"] = toPeer;
@@ -111,10 +101,17 @@ void SignalingClient::sendHangup(const QString &toPeer)
     sendJson(QJsonDocument(obj).toJson(QJsonDocument::Compact));
 }
 
+void SignalingClient::sendReject(const QString &toPeer)
+{
+    QJsonObject obj;
+    obj["type"] = "reject";
+    obj["to"] = toPeer;
+    obj["from"] = m_ownId;
+    sendJson(QJsonDocument(obj).toJson(QJsonDocument::Compact));
+}
+
 void SignalingClient::onTextMessageReceived(const QString &message)
 {
-    qDebug() << "SAILTALK onTextMessageReceived raw =" << message;
-
     const auto doc = QJsonDocument::fromJson(message.toUtf8());
     if (!doc.isObject()) {
         emit errorOccurred(QStringLiteral("Invalid JSON from server"));
@@ -137,6 +134,8 @@ void SignalingClient::onTextMessageReceived(const QString &message)
         );
     } else if (type == "hangup") {
         emit hangupReceived(from);
+    } else if (type == "reject") {
+        emit rejectReceived(from);
     } else if (type == "registered") {
         qDebug() << "SAILTALK registered as" << obj.value("id").toString();
     } else if (type == "server-info") {
@@ -150,8 +149,6 @@ void SignalingClient::onTextMessageReceived(const QString &message)
 
 void SignalingClient::sendJson(const QByteArray &json)
 {
-    qDebug() << "SAILTALK sendJson =" << json;
-
     if (m_socket->isValid())
         m_socket->sendTextMessage(QString::fromUtf8(json));
 }

@@ -75,8 +75,10 @@ void WebRtcManager::startCall(const QString &peerId)
 
     m_isCaller = true;
     m_currentPeer = peerId;
-    createPipeline();
+    m_pendingOfferSdp.clear();
+    m_hasPendingIncomingOffer = false;
 
+    createPipeline();
     emit callStateChanged(QStringLiteral("dialing"));
 }
 
@@ -110,6 +112,7 @@ void WebRtcManager::createOffer()
 
             gchar *sdp = gst_sdp_message_as_text(offer->sdp);
             emit self->localOfferReady(self->m_currentPeer, QString::fromUtf8(sdp));
+            emit self->callStateChanged(QStringLiteral("ringing"));
 
             g_free(sdp);
             gst_webrtc_session_description_free(offer);
@@ -159,7 +162,6 @@ void WebRtcManager::createAnswer()
         },
         this,
         nullptr);
-
     g_signal_emit_by_name(m_webrtcbin, "create-answer", nullptr, promise);
 }
 
@@ -217,6 +219,53 @@ void WebRtcManager::addIncomingAudioBranch(GstPad *srcPad)
     gst_element_sync_state_with_parent(sink);
 }
 
+void WebRtcManager::acceptIncomingCall()
+{
+    if (!m_hasPendingIncomingOffer || m_currentPeer.isEmpty() || m_pendingOfferSdp.isEmpty())
+        return;
+
+    qDebug() << "SAILTALK acceptIncomingCall from" << m_currentPeer;
+
+    m_isCaller = false;
+    createPipeline();
+
+    GstSDPMessage *sdpMsg = nullptr;
+    gst_sdp_message_new(&sdpMsg);
+
+    const QByteArray sdpUtf8 = m_pendingOfferSdp.toUtf8();
+    gst_sdp_message_parse_buffer(reinterpret_cast<const guint8 *>(sdpUtf8.constData()),
+                                 static_cast<guint>(sdpUtf8.size()),
+                                 sdpMsg);
+
+    GstWebRTCSessionDescription *offer =
+        gst_webrtc_session_description_new(GST_WEBRTC_SDP_TYPE_OFFER, sdpMsg);
+
+    g_signal_emit_by_name(m_webrtcbin, "set-remote-description", offer, nullptr);
+
+    emit callStateChanged(QStringLiteral("connecting"));
+    createAnswer();
+
+    gst_webrtc_session_description_free(offer);
+
+    m_pendingOfferSdp.clear();
+    m_hasPendingIncomingOffer = false;
+}
+
+void WebRtcManager::rejectIncomingCall()
+{
+    if (!m_hasPendingIncomingOffer || m_currentPeer.isEmpty())
+        return;
+
+    qDebug() << "SAILTALK rejectIncomingCall from" << m_currentPeer;
+
+    emit rejectOutgoingCallRequested(m_currentPeer);
+
+    m_pendingOfferSdp.clear();
+    m_hasPendingIncomingOffer = false;
+    m_currentPeer.clear();
+    emit callStateChanged(QStringLiteral("idle"));
+}
+
 void WebRtcManager::onNegotiationNeeded(GstElement *, gpointer user_data)
 {
     auto *self = static_cast<WebRtcManager *>(user_data);
@@ -262,45 +311,21 @@ void WebRtcManager::onPadAdded(GstElement *, GstPad *newPad, gpointer user_data)
     }
 }
 
-void WebRtcManager::handleRemoteHangup(const QString &fromPeer)
-{
-    qDebug() << "SAILTALK received hangup from" << fromPeer;
-
-    Q_UNUSED(fromPeer)
-
-    destroyPipeline();
-    m_currentPeer.clear();
-    m_isCaller = false;
-    emit callStateChanged(QStringLiteral("idle"));
-}
-
 void WebRtcManager::handleRemoteOffer(const QString &fromPeer, const QString &sdp)
 {
     qDebug() << "SAILTALK received offer from" << fromPeer;
 
+    if (m_pipeline || m_hasPendingIncomingOffer || !m_currentPeer.isEmpty()) {
+        qDebug() << "SAILTALK busy, ignoring incoming offer";
+        return;
+    }
+
     m_isCaller = false;
     m_currentPeer = fromPeer;
-    createPipeline();
+    m_pendingOfferSdp = sdp;
+    m_hasPendingIncomingOffer = true;
 
     emit callStateChanged(QStringLiteral("incoming"));
-
-    GstSDPMessage *sdpMsg = nullptr;
-    gst_sdp_message_new(&sdpMsg);
-
-    const QByteArray sdpUtf8 = sdp.toUtf8();
-    gst_sdp_message_parse_buffer(reinterpret_cast<const guint8 *>(sdpUtf8.constData()),
-                                 static_cast<guint>(sdpUtf8.size()),
-                                 sdpMsg);
-
-    GstWebRTCSessionDescription *offer =
-        gst_webrtc_session_description_new(GST_WEBRTC_SDP_TYPE_OFFER, sdpMsg);
-
-    g_signal_emit_by_name(m_webrtcbin, "set-remote-description", offer, nullptr);
-
-    createAnswer();
-    emit callStateChanged(QStringLiteral("connecting"));
-
-    gst_webrtc_session_description_free(offer);
 }
 
 void WebRtcManager::handleRemoteAnswer(const QString &fromPeer, const QString &sdp)
@@ -338,12 +363,42 @@ void WebRtcManager::handleRemoteIceCandidate(const QString &fromPeer, int mlineI
                           candidate.toUtf8().constData());
 }
 
+void WebRtcManager::handleRemoteHangup(const QString &fromPeer)
+{
+    qDebug() << "SAILTALK received hangup from" << fromPeer;
+
+    Q_UNUSED(fromPeer)
+
+    destroyPipeline();
+    m_currentPeer.clear();
+    m_pendingOfferSdp.clear();
+    m_hasPendingIncomingOffer = false;
+    m_isCaller = false;
+    emit callStateChanged(QStringLiteral("idle"));
+}
+
+void WebRtcManager::handleRemoteReject(const QString &fromPeer)
+{
+    qDebug() << "SAILTALK received reject from" << fromPeer;
+
+    Q_UNUSED(fromPeer)
+
+    destroyPipeline();
+    m_currentPeer.clear();
+    m_pendingOfferSdp.clear();
+    m_hasPendingIncomingOffer = false;
+    m_isCaller = false;
+    emit callStateChanged(QStringLiteral("rejected"));
+}
+
 void WebRtcManager::hangUp()
 {
     qDebug() << "SAILTALK hangUp";
 
     destroyPipeline();
     m_currentPeer.clear();
+    m_pendingOfferSdp.clear();
+    m_hasPendingIncomingOffer = false;
     m_isCaller = false;
     emit callStateChanged(QStringLiteral("idle"));
 }
