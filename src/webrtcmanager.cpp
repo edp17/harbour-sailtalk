@@ -2,6 +2,14 @@
 
 #include <QDebug>
 
+#define SAILTALK_VERBOSE_LOG 0
+
+#if SAILTALK_VERBOSE_LOG
+#define STV qDebug
+#else
+#define STV if (false) qDebug
+#endif
+
 WebRtcManager::WebRtcManager(QObject *parent)
     : QObject(parent)
 {
@@ -23,7 +31,7 @@ void WebRtcManager::createPipeline()
         "autoaudiosrc ! queue ! volume name=micvolume ! audioconvert ! audioresample ! opusenc ! rtpopuspay pt=111 ! "
         "application/x-rtp,media=audio,encoding-name=OPUS,payload=111 ! webrtc.";
 
-    qDebug() << "SAILTALK createPipeline";
+    STV() << "SAILTALK createPipeline";
 
     m_pipeline = gst_parse_launch(pipelineDesc, &error);
     if (!m_pipeline) {
@@ -112,7 +120,7 @@ void WebRtcManager::handlePeerDisconnected(const QString &fromPeer)
 
 void WebRtcManager::createOffer()
 {
-    qDebug() << "SAILTALK createOffer";
+    STV() << "SAILTALK createOffer";
 
     GstPromise *promise = gst_promise_new_with_change_func(
         [](GstPromise *promise, gpointer user_data) {
@@ -154,7 +162,7 @@ void WebRtcManager::createOffer()
 
 void WebRtcManager::createAnswer()
 {
-    qDebug() << "SAILTALK createAnswer";
+    STV() << "SAILTALK createAnswer";
 
     GstPromise *promise = gst_promise_new_with_change_func(
         [](GstPromise *promise, gpointer user_data) {
@@ -198,7 +206,7 @@ void WebRtcManager::addIncomingAudioBranch(GstPad *srcPad)
     if (!m_pipeline || !srcPad)
         return;
 
-    qDebug() << "SAILTALK addIncomingAudioBranch";
+    STV() << "SAILTALK addIncomingAudioBranch";
 
     GstElement *queue = gst_element_factory_make("queue", nullptr);
     GstElement *depay = gst_element_factory_make("rtpopusdepay", nullptr);
@@ -311,7 +319,7 @@ void WebRtcManager::onNegotiationNeeded(GstElement *, gpointer user_data)
 {
     auto *self = static_cast<WebRtcManager *>(user_data);
     if (!self->m_isCaller) {
-        qDebug() << "SAILTALK ignoring negotiation-needed on callee side";
+        STV() << "SAILTALK ignoring negotiation-needed on callee side";
         return;
     }
     self->createOffer();
@@ -344,7 +352,7 @@ void WebRtcManager::onPadAdded(GstElement *, GstPad *newPad, gpointer user_data)
         gst_caps_unref(caps);
     }
 
-    qDebug() << "SAILTALK onPadAdded caps =" << capsString;
+    STV() << "SAILTALK onPadAdded caps =" << capsString;
 
     if (capsString.contains(QStringLiteral("application/x-rtp")) &&
         capsString.contains(QStringLiteral("media=(string)audio"))) {
@@ -357,7 +365,7 @@ void WebRtcManager::handleRemoteOffer(const QString &fromPeer, const QString &sd
     qDebug() << "SAILTALK received offer from" << fromPeer;
 
     if (m_pipeline || m_hasPendingIncomingOffer || !m_currentPeer.isEmpty()) {
-        qDebug() << "SAILTALK busy, ignoring incoming offer";
+        STV() << "SAILTALK busy, ignoring incoming offer";
         return;
     }
 
@@ -393,7 +401,7 @@ void WebRtcManager::handleRemoteAnswer(const QString &fromPeer, const QString &s
 
 void WebRtcManager::handleRemoteIceCandidate(const QString &fromPeer, int mlineIndex, const QString &candidate)
 {
-    qDebug() << "SAILTALK received ICE from" << fromPeer
+    STV() << "SAILTALK received ICE from" << fromPeer
              << "mline =" << mlineIndex;
 
     if (!m_webrtcbin)
@@ -420,7 +428,7 @@ void WebRtcManager::handleRemoteHangup(const QString &fromPeer)
 
 void WebRtcManager::handleRemoteReject(const QString &fromPeer)
 {
-    qDebug() << "SAILTALK received reject from" << fromPeer;
+    STV() << "SAILTALK received reject from" << fromPeer;
 
     Q_UNUSED(fromPeer)
 
@@ -434,7 +442,7 @@ void WebRtcManager::handleRemoteReject(const QString &fromPeer)
 
 void WebRtcManager::hangUp()
 {
-    qDebug() << "SAILTALK hangUp";
+    STV() << "SAILTALK hangUp";
 
     destroyPipeline();
     m_currentPeer.clear();

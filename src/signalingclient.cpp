@@ -8,6 +8,14 @@
 #include <QStringList>
 #include <QtWebSockets/QWebSocket>
 
+#define SAILTALK_VERBOSE_LOG 0
+
+#if SAILTALK_VERBOSE_LOG
+#define STV qDebug
+#else
+#define STV if (false) qDebug
+#endif
+
 SignalingClient::SignalingClient(QObject *parent)
     : QObject(parent),
       m_socket(new QWebSocket())
@@ -26,14 +34,14 @@ SignalingClient::~SignalingClient() = default;
 
 void SignalingClient::connectToServer(const QString &url, const QString &ownId)
 {
-    qDebug() << "SAILTALK connectToServer url =" << url << "ownId =" << ownId;
+    STV() << "SAILTALK connectToServer url =" << url << "ownId =" << ownId;
     m_ownId = ownId;
     m_socket->open(QUrl(url));
 }
 
 void SignalingClient::disconnectFromServer()
 {
-    qDebug() << "SAILTALK disconnectFromServer";
+    STV() << "SAILTALK disconnectFromServer";
     m_socket->close();
 }
 
@@ -149,7 +157,7 @@ void SignalingClient::onTextMessageReceived(const QString &message)
     } else if (type == "registered") {
         qDebug() << "SAILTALK registered as" << obj.value("id").toString();
     } else if (type == "server-info") {
-        qDebug() << "SAILTALK server-info:" << obj.value("message").toString();
+        STV() << "SAILTALK server-info:" << obj.value("message").toString();
     } else if (type == "error") {
         emit errorOccurred(obj.value("message").toString());
     } else {
