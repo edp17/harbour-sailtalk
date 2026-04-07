@@ -191,7 +191,7 @@ void WebRtcManager::addIncomingAudioBranch(GstPad *srcPad)
     GstElement *dec = gst_element_factory_make("opusdec", nullptr);
     GstElement *conv = gst_element_factory_make("audioconvert", nullptr);
     GstElement *resample = gst_element_factory_make("audioresample", nullptr);
-    GstElement *sink = gst_element_factory_make("autoaudiosink", nullptr);
+    GstElement *sink = gst_element_factory_make("pulsesink", nullptr);
 
     if (!queue || !depay || !dec || !conv || !resample || !sink) {
         emit errorOccurred(QStringLiteral("Failed to create incoming audio elements"));
@@ -203,6 +203,18 @@ void WebRtcManager::addIncomingAudioBranch(GstPad *srcPad)
         if (sink) gst_object_unref(sink);
         return;
     }
+
+    GstStructure *streamProps = gst_structure_new(
+        "props",
+        "media.role", G_TYPE_STRING, "phone",
+        "media.name", G_TYPE_STRING, "SailTalk",
+        nullptr
+    );
+    g_object_set(sink,
+                 "stream-properties", streamProps,
+                 "client-name", "SailTalk",
+                 nullptr);
+    gst_structure_free(streamProps);
 
     gst_bin_add_many(GST_BIN(m_pipeline), queue, depay, dec, conv, resample, sink, nullptr);
 

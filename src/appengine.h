@@ -15,6 +15,7 @@ class AppEngine : public QObject
     Q_PROPERTY(QString signalingUrl READ signalingUrl WRITE setSignalingUrl NOTIFY signalingUrlChanged)
     Q_PROPERTY(QString callState READ callState NOTIFY callStateChanged)
     Q_PROPERTY(bool connectedToSignaling READ connectedToSignaling NOTIFY connectedToSignalingChanged)
+    Q_PROPERTY(bool speakerMode READ speakerMode WRITE setSpeakerMode NOTIFY speakerModeChanged)
 
 public:
     explicit AppEngine(QObject *parent = nullptr);
@@ -29,6 +30,9 @@ public:
 
     QString callState() const;
     bool connectedToSignaling() const;
+
+    bool speakerMode() const;
+    void setSpeakerMode(bool enabled);
 
     Q_INVOKABLE void connectSignaling();
     Q_INVOKABLE void disconnectSignaling();
@@ -46,6 +50,7 @@ signals:
     void connectedToSignalingChanged();
     void errorOccurred(const QString &message);
     void incomingCall(const QString &fromPeer);
+    void speakerModeChanged();
 
 private:
     QString m_ownId;
@@ -55,4 +60,6 @@ private:
 
     WebRtcManager *m_webrtc;
     SignalingClient *m_signaling;
+
+    bool m_speakerMode = true;
 };

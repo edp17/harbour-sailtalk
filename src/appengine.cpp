@@ -2,6 +2,7 @@
 #include "webrtcmanager.h"
 #include "signalingclient.h"
 
+#include <QProcess>
 #include <QUuid>
 #include <QSettings>
 
@@ -22,6 +23,8 @@ AppEngine::AppEngine(QObject *parent)
 
     // Persistent last-used peer ID
     m_peerId = settings.value("identity/peerId").toString();
+
+    m_speakerMode = settings.value("audio/speakerMode", true).toBool();
 
     // Hardcoded signaling server
     m_signalingUrl = QStringLiteral("ws://192.168.1.90:8585");
@@ -67,6 +70,18 @@ AppEngine::AppEngine(QObject *parent)
 
     connect(m_webrtc, &WebRtcManager::rejectOutgoingCallRequested,
             m_signaling, &SignalingClient::sendReject);
+
+    {
+        const QString port = m_speakerMode
+                ? QStringLiteral("output-speaker")
+                : QStringLiteral("output-earpiece");
+
+        QProcess::execute(QStringLiteral("pactl"),
+                          QStringList()
+                              << QStringLiteral("set-sink-port")
+                              << QStringLiteral("sink.primary_output")
+                              << port);
+    }
 }
 
 AppEngine::~AppEngine() = default;
@@ -134,4 +149,32 @@ void AppEngine::acceptIncomingCall()
 void AppEngine::rejectIncomingCall()
 {
     m_webrtc->rejectIncomingCall();
+}
+
+bool AppEngine::speakerMode() const
+{
+    return m_speakerMode;
+}
+
+void AppEngine::setSpeakerMode(bool enabled)
+{
+    if (m_speakerMode == enabled)
+        return;
+
+    m_speakerMode = enabled;
+
+    QSettings settings;
+    settings.setValue("audio/speakerMode", m_speakerMode);
+
+    const QString port = m_speakerMode
+            ? QStringLiteral("output-speaker")
+            : QStringLiteral("output-earpiece");
+
+    QProcess::execute(QStringLiteral("pactl"),
+                      QStringList()
+                          << QStringLiteral("set-sink-port")
+                          << QStringLiteral("sink.primary_output")
+                          << port);
+
+    emit speakerModeChanged();
 }

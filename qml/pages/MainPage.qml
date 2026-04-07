@@ -125,6 +125,14 @@ Page {
             TextSwitch {
                 width: parent.width
                 visible: appEngine.callState === "connected" || appEngine.callState === "connecting"
+                text: qsTr("Use loudspeaker")
+                checked: appEngine.speakerMode
+                onCheckedChanged: appEngine.speakerMode = checked
+            }
+
+            TextSwitch {
+                width: parent.width
+                visible: appEngine.callState === "connected" || appEngine.callState === "connecting"
                 text: qsTr("Mute microphone")
                 onCheckedChanged: appEngine.setMute(checked)
             }
